@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 
 POPULAR_LANGUAGES = [
     'JavaScript',
-    'Java',
     'Ruby',
     'C++',
     'C#',
     'C',
+    'Java',
     'Python',
     'Go',
     '1c'
@@ -24,12 +24,10 @@ def predict_rub_salary(salary_from, salary_to):
     elif salary_from and salary_to:
         сalculated_salary = (salary_from + salary_to) / 2
         return сalculated_salary
-    elif not salary_to or salary_to == 0:
-        сalculated_salary = salary_from * 1.2
-        return сalculated_salary
+    elif salary_from:
+        return salary_from * 1.2
     else:
-        сalculated_salary = salary_to * 0.8
-        return сalculated_salary
+        return salary_to * 0.8
 
 
 def get_table(about_vacancies, title):
@@ -60,40 +58,47 @@ def predict_rub_salary_hh():
     area_id = 1
     days_period = 30
     for language in POPULAR_LANGUAGES:
-        about_vacancy = {}
-        payload = {
-            'text': f'Программист {language}',
-            'area': area_id,
-            'period': days_period
-        }
-        response = requests.get('https://api.hh.ru/vacancies/', params=payload)
-        response.raise_for_status()
-        page = response.json()
-        vacancies = page['items']
-        vacancies_amount = page['found']
         vacancies_salaries = []
-        processed_vacancies = 0
-        for vacancy in vacancies:
-            vacancy_period_salary = vacancy['salary']
-            if not vacancy_period_salary:
-                continue
-            if vacancy_period_salary['currency'] != 'RUR':
-                continue
-            vacancy_salary = predict_rub_salary(
-                vacancy_period_salary['from'],
-                vacancy_period_salary['to']
-                )
-            if vacancy_salary:
-                vacancies_salaries.append(vacancy_salary)
+        page_number = 0
+        pages = 1
+        while page_number < pages:
+            payload = {
+                'text': f'Программист {language}',
+                'area': area_id,
+                'period': days_period,
+                'page': page_number,
+            }
+            response = requests.get('https://api.hh.ru/vacancies/', params=payload)
+            response.raise_for_status()
+            page = response.json()
+            vacancies = page['items']
+            vacancies_amount = page['found']
+            processed_vacancies = 0
+            for vacancy in vacancies:
+                vacancy_period_salary = vacancy['salary']
+                if not vacancy_period_salary:
+                    continue
+                if vacancy_period_salary['currency'] != 'RUR':
+                    continue
+                vacancy_salary = predict_rub_salary(
+                    vacancy_period_salary['from'],
+                    vacancy_period_salary['to']
+                    )
+                if vacancy_salary:
+                    vacancies_salaries.append(vacancy_salary)
+            page_number += 1
+            pages = page['pages']
         salaries_amount = sum(vacancies_salaries)
         processed_vacancies = len(vacancies_salaries)
         average_salary = 0
         if processed_vacancies:
             average_salary = salaries_amount / processed_vacancies
-        about_vacancy['vacancy_amount'] = vacancies_amount
-        about_vacancy['vacancies_processed'] = processed_vacancies
-        about_vacancy['average_salary'] = int(average_salary)
-        programming_jobs_hh[language] = about_vacancy
+        vacancy_details = {
+            'vacancy_amount': vacancies_amount,
+            'vacancies_processed': processed_vacancies,
+            'average_salary': int(average_salary)
+        }
+        programming_jobs_hh[language] = vacancy_details
     return programming_jobs_hh
 
 
@@ -102,7 +107,6 @@ def predict_rub_salary_sj(sj_token):
     for language in POPULAR_LANGUAGES:
         vacancies_salaries = []
         processed_vacancies = 0
-        about_vacancy = {}
         page_number = 0
         vacancy_amount = 0
         more_pages = True
@@ -127,11 +131,11 @@ def predict_rub_salary_sj(sj_token):
                 )
             response.raise_for_status()
             page = response.json()
-            for about_vacancy in page['objects']:
-                if about_vacancy['currency'] == 'rub':
+            for vacancy_details in page['objects']:
+                if vacancy_details['currency'] == 'rub':
                     vacancy_salary = predict_rub_salary(
-                        about_vacancy['payment_from'],
-                        about_vacancy['payment_to']
+                        vacancy_details['payment_from'],
+                        vacancy_details['payment_to']
                     )
                 if vacancy_salary:
                     vacancies_salaries.append(vacancy_salary)
@@ -144,10 +148,12 @@ def predict_rub_salary_sj(sj_token):
         average_salary = 0
         if processed_vacancies:
             average_salary = salaries_amount / processed_vacancies
-        about_vacancy['vacancy_amount'] = vacancy_amount
-        about_vacancy['vacancies_processed'] = processed_vacancies
-        about_vacancy['average_salary'] = int(average_salary)
-        programming_jobs_sj[language] = about_vacancy
+        vacancy_details = {
+            'vacancy_amount': vacancy_amount,
+            'vacancies_processed': processed_vacancies,
+            'average_salary': int(average_salary)
+        }
+        programming_jobs_sj[language] = vacancy_details
     return programming_jobs_sj
 
 
